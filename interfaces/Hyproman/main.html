@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EngineDM - Hyproman</title>
+<!--
+  EngineDM interface contract (host = enginedmgreeterd, elements are found BY ID, no JavaScript):
+
+    required : #username  #password  #login
+    optional : #twofactor  #twofactor-row  #error  #sessions  #themes  #restart
+               #password-mask  #password-toggle  #password-toggle-show  #password-toggle-hide
+               #bg  #inspector-toggle  #inspector  #inspector-info  #wallpapers
+               #wallpaper-search  #wallpaper-search-hint
+
+  #bg-pic              empty container inside #bg: the host puts the chosen picture in it as a fresh element
+                       (a new element is styled reliably; changing an old one's style was not)
+  #username-hint / #password-hint / #twofactor-hint
+                       label spans (Blitz draws no placeholder text); the host adds class "hidden" once the field has text
+  #bg                  background layer: the host sets its `style` attribute when a picture is chosen
+                       (the file is read as raw bytes and embedded as a data: URI, no file:// loading)
+  #inspector-toggle    the eye button: opens/closes #inspector (class "hidden" is toggled)
+  #inspector           the picture inspector panel, starts with class "hidden"
+  #inspector-info      one line: scanned folder, number of pictures
+  #wallpapers          filled with <button class="pic" id="pic-N"> (class "selected" for the chosen one),
+                       one per image found in ~/Pictures ($EDM_PICTURES_DIR overrides the folder)
+  #wallpaper-search    optional text input in the inspector: typing filters #wallpapers (every word must occur in the
+                       picture name, case-insensitive); #wallpaper-search-hint is its label span (class "hidden" once
+                       the box has text). While it is empty the list follows `user_settings { filter=, filter_known= }` (nothing by default). Without the box nothing can be picked.
+  #sessions / #themes  each holds ONE <button class="carousel swap" id="session-cur" / "theme-cur"> showing the
+                       current entry; Up/Down arrows (Shift = theme) or a click swaps it for the next one
+  #twofactor-row       gets class "hidden" when two-factor is off
+  #error               gets "msg error|info visible" and new text
+-->
+</head>
+<body>
+  <div id="bg">
+    <div id="bg-pic"></div>
+    <div class="glow glow-red"></div>
+    <div class="glow glow-blue"></div>
+    <div class="ring r1"></div>
+    <div class="ring r2"></div>
+    <div class="ring r3"></div>
+    <div class="ring r4"></div>
+    <div class="ring r5"></div>
+  </div>
+
+  <button id="inspector-toggle" type="button" aria-label="Pictures">
+    <span class="eye"><span class="pupil"></span></span>
+  </button>
+
+  <aside id="inspector" class="hidden">
+    <div class="ins-head">Pictures</div>
+    <div id="inspector-info" class="ins-info">Scanning...</div>
+    <div class="fld ins-search">
+      <span id="wallpaper-search-hint" class="hint">Search wallpapers</span>
+      <input id="wallpaper-search" type="text" spellcheck="false" aria-label="Search wallpapers">
+    </div>
+    <div id="wallpapers"></div>
+  </aside>
+
+  <div id="brand">HYPROMAN</div>
+
+  <main id="panel">
+    <h1 id="title">Welcome is EngineDM back to session!</h1>
+
+    <div class="fld">
+      <span id="username-hint" class="hint">Username</span>
+      <input id="username" type="text" spellcheck="false" aria-label="Username">
+    </div>
+
+    <div class="row">
+      <div class="pwbox">
+        <span id="password-hint" class="hint">Password</span>
+        <span id="password-mask" class="pwmask"></span>
+        <input id="password" type="text" class="bare" placeholder="Password" spellcheck="false" aria-label="Password">
+      </div>
+      <button id="password-toggle" type="button" class="link" aria-label="Show or hide password"><span id="password-toggle-show"><span class="eye"><span class="pupil"></span></span></span><span id="password-toggle-hide" class="hidden"><span class="eye-closed"></span></span></button>
+    </div>
+
+    <div id="twofactor-row" class="hidden">
+      <div class="fld">
+        <span id="twofactor-hint" class="hint">2FA Code</span>
+        <input id="twofactor" type="text" maxlength="6" spellcheck="false" aria-label="2FA code">
+      </div>
+    </div>
+
+    <div id="sessions" class="choices"></div>
+
+    <p id="error" class="msg"></p>
+
+    <button id="login" type="button" class="login">Login</button>
+
+    <div id="themes" class="choices"></div>
+
+    <button id="restart" type="button" class="link restart">Restart session</button>
+  </main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+#%PAM-1.0
+# PAM service for EngineDM on OpenRC systems (elogind instead of systemd).
+# Set `pam_service=enginedm` in /etc/enginedm/enginedm.conf.
+# pam_elogind.so creates the logind session and /run/user/<uid>; without it Wayland sessions
+# (Hyprland, Mango, ...) start without XDG_RUNTIME_DIR.
+# Debian-style systems: replace the includes with `@include common-auth` / `common-account` /
+# `common-session` / `common-password`.
+auth       include      system-local-login
+account    include      system-local-login
+password   include      system-local-login
+session    include      system-local-login
+session    optional     pam_elogind.so

@@ -1,0 +1,85 @@
+#!/bin/sh
+# EngineDM run loop (standalone mode), installed to /usr/libexec/enginedm-run and started by the
+# OpenRC service (supervise-daemon) or the systemd service.
+#
+# The greeter runs in its own Weston (kiosk-shell, via /usr/libexec/enginedm-weston), which owns the
+# display, so a user session cannot start while it is alive. The greeter therefore only logs the
+# user in, writes a handoff file and exits (the wrapper stops Weston with it). This loop then starts the session on the freed VT and, when the session ends,
+# shows the greeter again.
+
+# Defaults, then the (plain shell) settings file.
+vt=7
+weston_args=""
+weston_backend=drm
+weston_config=/etc/enginedm/weston.ini
+libseat_backend=""
+weston_delay=3
+[ -r /etc/conf.d/enginedm ] && . /etc/conf.d/enginedm
+export weston_args weston_backend weston_config
+
+HANDOFF="${EDM_HANDOFF_FILE:-/run/enginedm/handoff}"
+FIRST_DONE=/run/enginedm/first-start-done   # /run is cleared at boot
+export XDG_SEAT=seat0 XDG_VTNR="$vt"
+export EDM_HANDOFF_FILE="$HANDOFF"
+[ -n "$libseat_backend" ] && export LIBSEAT_BACKEND="$libseat_backend"
+
+# Weston latency: the very first greeter after boot often comes up black when Weston starts too
+# early (GPU/seat/udev not settled). Instead of killing and restarting it, wait `weston_delay`
+# seconds once before the first Weston launch (0 = off). Later greeter starts are not delayed.
+# Boot splash (Plymouth): plymouthd keeps the DRM device (master) and the console until it is told to
+# quit. Weston's drm backend cannot take the display meanwhile: the screen goes black and the splash
+# looks frozen. Ask it to quit (keeping the last frame, so no flicker) and wait until it is gone.
+# `splash_quit=0` in /etc/conf.d/enginedm turns this off.
+quit_splash() {
+	[ "${splash_quit:-1}" = 0 ] && return 0
+	command -v plymouth >/dev/null 2>&1 || return 0
+	plymouth --ping >/dev/null 2>&1 || return 0
+	echo "enginedm-run: boot splash is active, asking plymouth to quit" >&2
+	plymouth quit >/dev/null 2>&1 || plymouth quit >/dev/null 2>&1
+	i=0
+	while [ "$i" -lt 25 ] && plymouth --ping >/dev/null 2>&1; do
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+}
+
+delay_first_start() {
+	[ "${weston_delay:-0}" -gt 0 ] 2>/dev/null || return 0
+	[ -e "$FIRST_DONE" ] && return 0
+	: > "$FIRST_DONE" 2>/dev/null
+	sleep "$weston_delay"
+}
+
+quit_splash
+delay_first_start
+
+fails=0
+while :; do
+	rm -f "$HANDOFF"
+	started=$(date +%s)
+
+	# Greeter: openvt allocates VT $vt, switches to it (-s) and waits (-w) for the wrapper,
+	# which runs Weston + the greeter and returns when the greeter is done.
+	openvt -c "$vt" -s -f -w -- /usr/libexec/enginedm-weston
+
+	if [ -f "$HANDOFF" ]; then
+		fails=0
+		# Session host: opens the PAM session, starts the user's compositor, waits for it.
+		# No XDG_RUNTIME_DIR here: pam_elogind/pam_systemd provide the user's.
+		env -u XDG_RUNTIME_DIR openvt -c "$vt" -s -f -w -- /usr/bin/enginedmgreeterd --run-handoff
+		rm -f /run/enginedm/session.pid   # stale pid file (session host killed)
+		continue
+	fi
+
+	# No login happened: the greeter or Weston ended by itself. Stop if that happens in a loop.
+	if [ $(($(date +%s) - started)) -lt 5 ]; then
+		fails=$((fails + 1))
+	else
+		fails=0
+	fi
+	if [ "$fails" -ge 10 ]; then
+		echo "enginedm-run: greeter keeps exiting right away, giving up" >&2
+		exit 1
+	fi
+	sleep 1
+done

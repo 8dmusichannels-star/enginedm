@@ -1,0 +1,37 @@
+# EngineDM as a systemd service (standalone mode: the greeter hosts the login itself and runs as
+# root inside a Weston kiosk-shell on its own VT; /usr/libexec/enginedm-run starts the user's session
+# after the login). For greetd mode use greetd's own unit instead.
+#
+# Install:  /etc/systemd/system/enginedm.service      (install.sh does this)
+# Enable:   sudo systemctl enable enginedm.service    (replaces any other display manager)
+#           sudo systemctl set-default graphical.target
+# Settings: /etc/conf.d/enginedm
+# Log:      /var/log/enginedm.log
+
+[Unit]
+Description=EngineDM display manager (Blitz greeter on Weston)
+Documentation=file:///usr/share/doc/enginedm/README.md
+After=systemd-user-sessions.service systemd-logind.service plymouth-quit-wait.service
+Wants=systemd-logind.service
+# The greeter uses VT 7 (vt= in /etc/conf.d/enginedm); keep a getty off it.
+After=getty@tty7.service
+Conflicts=getty@tty7.service
+# Give up after 5 failed starts within 5 minutes (the VT stays usable).
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/enginedm-run
+Restart=on-failure
+RestartSec=2
+# Weston needs a private runtime dir; root has no /run/user/0 without a logind session.
+RuntimeDirectory=enginedm
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/enginedm
+StandardOutput=append:/var/log/enginedm.log
+StandardError=append:/var/log/enginedm.log
+
+[Install]
+Alias=display-manager.service
+WantedBy=graphical.target

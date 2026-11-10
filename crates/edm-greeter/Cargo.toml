@@ -1,0 +1,43 @@
+[package]
+name = "edm-greeter"
+description = "EngineDM greeter: login logic in Rust, interface rendered by Blitz (HTML/CSS)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "enginedmgreeterd"
+path = "src/main.rs"
+
+[features]
+# `wallpaper` is on by default: Blitz loads CSS background images (also data: URIs, which the picture
+# inspector uses) through the net provider; without it the chosen picture is never drawn.
+default = ["ui", "wallpaper"]
+# `--no-default-features` builds only the logic (no GPU/Blitz deps), handy for CI and tests.
+# Wallpaper images: adds blitz-net + tokio (file:// loading). Not default; API wiring is unverified.
+wallpaper = ["ui", "dep:blitz-net", "dep:tokio"]
+ui = ["dep:blitz-dom", "dep:blitz-html", "dep:blitz-shell", "dep:blitz-traits", "dep:keyboard-types", "dep:anyrender_vello", "dep:image"]
+
+[dependencies]
+edm-core = { path = "../edm-core" }
+zeroize = "1"
+
+# Blitz is beta: keep these pinned and upgrade on purpose.
+blitz-dom = { version = "0.2", optional = true }
+blitz-html = { version = "0.2", optional = true }
+blitz-shell = { version = "0.2", optional = true }
+blitz-traits = { version = "0.2", optional = true }
+# Same crate (0.7) blitz-traits uses for `Key`/`Modifiers`; already in Cargo.lock.
+keyboard-types = { version = "0.7", optional = true }
+# Must match the anyrender that blitz-shell 0.2.3 uses (anyrender 0.6.x). "0" resolved to a newer
+# anyrender_vello (anyrender 0.14) and failed with E0277; pinned to the 0.6 series.
+#   cargo tree -p blitz-shell | grep anyrender   ->  put that exact version here.
+anyrender_vello = { version = "0.6", optional = true }
+# Never used directly: it exists only to switch on image decoders through Cargo feature unification.
+# blitz-dom 0.2.4 depends on `image` 0.25 with no decoders (Cargo.lock shows no zune-jpeg/png/gif/webp
+# under it), so every picture failed with "Could not parse image". Same semver range (0.25) => one
+# shared crate, now with these decoders compiled in.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"], optional = true }
+blitz-net = { version = "0.2", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread"], optional = true }

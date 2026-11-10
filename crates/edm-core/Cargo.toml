@@ -1,0 +1,15 @@
+[package]
+name = "edm-core"
+description = "EngineDM core: config, PAM auth, 2FA, sessions, themes (pure Rust, no FFI)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+libc = "0.2"
+pam-client = "0.5"   # original manifest said "0.1"; acct_mgmt() is used now
+otpauth = "0.5"
+zeroize = "1"

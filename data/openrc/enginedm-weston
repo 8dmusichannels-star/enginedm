@@ -1,0 +1,82 @@
+#!/bin/sh
+# EngineDM greeter compositor wrapper, installed to /usr/libexec/enginedm-weston.
+#
+# Starts Weston (kiosk-shell) on its own socket, runs the greeter as its only client and, when the
+# greeter exits (login done, or crash), stops Weston again so the caller gets control back:
+#   * greetd:      default_session.command = "/usr/libexec/enginedm-weston" (greetd starts the
+#                  user's session only after this process is gone)
+#   * standalone:  /usr/libexec/enginedm-run starts it on the greeter VT through openvt
+#
+# Why a wrapper and not "weston -- greeter": the exit sequence is explicit (SIGTERM, then SIGKILL)
+# and does not depend on how a given Weston version handles a client that quits. The exit status
+# is the greeter's.
+
+# Defaults, then the (plain shell) settings file; values already in the environment win.
+: "${weston_config:=/etc/enginedm/weston.ini}"
+: "${weston_backend:=drm}"
+: "${weston_args:=}"
+[ -r /etc/conf.d/enginedm ] && . /etc/conf.d/enginedm
+
+SOCKET=enginedm-greeter
+GREETER=/usr/bin/enginedmgreeterd
+
+if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "$XDG_RUNTIME_DIR" ]; then
+	echo "enginedm-weston: XDG_RUNTIME_DIR is not set or does not exist" >&2
+	exit 1
+fi
+if [ ! -r "$weston_config" ]; then
+	echo "enginedm-weston: $weston_config not readable (run install.sh)" >&2
+	exit 1
+fi
+
+# A running boot splash (Plymouth) holds the DRM device, Weston then cannot start (black screen).
+# enginedm-run already does this in standalone mode; this covers greetd mode. Harmless if no splash.
+if [ "${splash_quit:-1}" != 0 ] && command -v plymouth >/dev/null 2>&1 && plymouth --ping >/dev/null 2>&1; then
+	plymouth quit >/dev/null 2>&1 || plymouth quit >/dev/null 2>&1
+	i=0
+	while [ "$i" -lt 25 ] && plymouth --ping >/dev/null 2>&1; do
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+fi
+
+# shellcheck disable=SC2086
+weston --backend="$weston_backend" --socket="$SOCKET" --config="$weston_config" $weston_args &
+wpid=$!
+
+stop_weston() {
+	kill -0 "$wpid" 2>/dev/null || return 0
+	kill -TERM "$wpid" 2>/dev/null
+	i=0
+	while [ "$i" -lt 15 ] && kill -0 "$wpid" 2>/dev/null; do
+		sleep 0.2 2>/dev/null || sleep 1
+		i=$((i + 1))
+	done
+	kill -0 "$wpid" 2>/dev/null && kill -KILL "$wpid" 2>/dev/null
+	wait "$wpid" 2>/dev/null
+}
+trap 'kill "$gpid" 2>/dev/null; stop_weston; exit 143' TERM INT HUP
+
+# Wait (max ~10 s) for Weston's Wayland socket; give up at once if Weston died.
+i=0
+while [ ! -S "$XDG_RUNTIME_DIR/$SOCKET" ]; do
+	if ! kill -0 "$wpid" 2>/dev/null; then
+		echo "enginedm-weston: weston exited before creating its socket (see the log above)" >&2
+		exit 1
+	fi
+	i=$((i + 1))
+	if [ "$i" -gt 50 ]; then
+		echo "enginedm-weston: timed out waiting for $XDG_RUNTIME_DIR/$SOCKET" >&2
+		stop_weston
+		exit 1
+	fi
+	sleep 0.2 2>/dev/null || sleep 1
+done
+
+WAYLAND_DISPLAY=$SOCKET "$GREETER" &
+gpid=$!
+wait "$gpid"
+rc=$?
+
+stop_weston
+exit "$rc"

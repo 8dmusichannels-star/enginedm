@@ -1,0 +1,11 @@
+# Example /etc/greetd/config.toml for EngineDM (install.sh copies it to /etc/greetd/enginedm-config.toml).
+# greetd owns PAM (service "greetd"), the logind session, the VT and the seat. The greeter only
+# talks to it over $GREETD_SOCK and exits after start_session; greetd then starts the session.
+[terminal]
+vt = 1
+
+[default_session]
+# The greeter needs a compositor of its own; this wrapper starts Weston (kiosk-shell, config
+# /etc/enginedm/weston.ini), runs the greeter in it and stops Weston when the greeter exits.
+command = "/usr/libexec/enginedm-weston"
+user = "greeter"

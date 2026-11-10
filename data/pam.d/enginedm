@@ -1,0 +1,10 @@
+#%PAM-1.0
+# PAM service for EngineDM (set `pam_service=enginedm` in /etc/enginedm/enginedm.conf).
+# session ... pam_systemd.so is what creates the logind session and /run/user/<uid>.
+# Debian/Ubuntu: replace the includes with `@include common-auth` / `common-account` /
+# `common-session` / `common-password` and add the pam_systemd line to the session part.
+auth       include      common-auth
+account    include      common-account
+password   include      common-password
+session    include      common-session
+session    optional     pam_elogind.so

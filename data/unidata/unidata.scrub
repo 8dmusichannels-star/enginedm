@@ -1,0 +1,8 @@
+{
+  "targets": [
+    { "platform": "Gtk3", "dir_path": "/usr/share/themes" },
+    { "platform": "Gtk4", "dir_path": "/usr/share/themes" },
+    { "platform": "Gtk3", "dir_path": "/usr/local/share/themes" },
+    { "platform": "Gtk4", "dir_path": "/usr/local/share/themes" }
+  ]
+}

@@ -1,0 +1,64 @@
+when:
+  - event: tag
+
+variables:
+  - &rust_image 'docker.io/library/rust:1-bookworm'
+  - &deps >-
+    apt-get update -qq &&
+    apt-get install -y -qq --no-install-recommends
+    libpam0g-dev libclang-dev clang pkg-config build-essential
+
+steps:
+  - name: clippy
+    image: *rust_image
+    failure: ignore
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - *deps
+      - rustup component add clippy
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  - name: audit
+    image: *rust_image
+    failure: ignore
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - cargo install cargo-audit --locked
+      - cargo audit
+
+  - name: build-release
+    image: *rust_image
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - *deps
+      - cargo build --release --workspace --locked
+      - mkdir -p dist
+      - |
+        ARCH=$(uname -m)
+        for f in $(find target/release -maxdepth 1 -type f -perm -u+x ! -name '*.so' ! -name '*.d'); do
+          cp "$f" "dist/$(basename "$f")-$CI_COMMIT_TAG-linux-$ARCH"
+        done
+      - test -n "$(ls dist)"
+      - cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+  - name: release
+    image: docker.io/library/alpine:3
+    environment:
+      CODEBERG_TOKEN:
+        from_secret: codeberg_token
+    commands:
+      - apk add --no-cache curl jq
+      - test -s CHANGELOG.md
+      - export API="https://codeberg.org/api/v1/repos/$CI_REPO"
+      - jq -n --arg tag "$CI_COMMIT_TAG" --rawfile body CHANGELOG.md '{tag_name:$tag,name:$tag,body:$body}' > release.json
+      - curl -fsS -X POST -H "Authorization:token $CODEBERG_TOKEN" -H "Content-Type:application/json" -d @release.json "$API/releases" > created.json
+      - export RELEASE_ID=$(jq -r .id created.json)
+      - test -n "$RELEASE_ID" && test "$RELEASE_ID" != null
+      - |
+        for f in dist/*; do
+          echo "Uploading $(basename "$f")"
+          curl -fsS -X POST -H "Authorization:token $CODEBERG_TOKEN" -F "attachment=@$f" "$API/releases/$RELEASE_ID/assets?name=$(basename "$f")" > /dev/null
+        done

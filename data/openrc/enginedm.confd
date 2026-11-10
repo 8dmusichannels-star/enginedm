@@ -1,0 +1,33 @@
+# /etc/conf.d/enginedm  (sourced by /usr/libexec/enginedm-run, for OpenRC and systemd alike,
+# so it is plain shell)
+
+# VT the greeter runs on. Artix/Gentoo start a getty on tty1-6, so 7 does not collide.
+# To use another VT, first remove its getty: rc-update del agetty.tty1 default (OpenRC),
+# or systemctl disable getty@tty1 (systemd; the unit conflicts with getty@tty7 only).
+vt=7
+
+# Weston backend for the greeter: drm (real display) | headless | ... (see `weston --help`).
+weston_backend="drm"
+
+# Extra arguments for weston, e.g. "--renderer=pixman" for software rendering in a VM
+# (older Weston: "--use-pixman"). Proprietary NVIDIA needs no extra flag with Weston.
+weston_args=""
+
+# Weston config used for the greeter (installed by install.sh).
+weston_config="/etc/enginedm/weston.ini"
+
+# Seconds to wait once, at the first greeter start after boot, before Weston is launched
+# (fixes a black first greeter without killing/restarting Weston). 0 = no delay.
+weston_delay=3
+
+# Seat backend for libseat (used by Weston): seatd | logind | builtin. Empty = auto-detect.
+# Running as root without seatd/elogind works with "builtin".
+libseat_backend=""
+
+# Optional EngineDM overrides, e.g.:
+#export EDM_INTERFACE_DIR=/usr/share/enginedm/interfaces
+#export EDM_STATE_DIR=/var/lib/enginedm
+
+# Quit the boot splash (Plymouth) before Weston starts. While plymouthd runs it keeps the display,
+# Weston cannot open it and the screen stays black. 1 = quit it (default), 0 = leave it alone.
+splash_quit=1
